@@ -103,7 +103,7 @@ class DQNAgent:
             else:
                 target[i][actions[i]] = rewards[i] + self.discount_factor * (
                     np.amax(target_val[i]))
-
+        print(states.shape)
         self.model.fit(states, target, batch_size=self.batch_size,
                        epochs=1, verbose=0)
 

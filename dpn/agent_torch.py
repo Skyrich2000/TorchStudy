@@ -3,32 +3,37 @@ import gym
 import pylab
 import random
 import numpy as np
+import time
 from collections import deque
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class Net(nn.Module):
     def __init__(self, input_size, output_size):
         super(Net, self).__init__()
-        self.layer = nn.Sequential(
-            nn.Linear(input_size, 30),
-            nn.ReLU(),
-            nn.Linear(30, 30),
-            nn.ReLU(),
-            nn.Linear(30, output_size)
-        )
-        torch.nn.init.xavier_uniform_(self.fc.layer)
+        self.fc1 = nn.Linear(input_size, 30)
+        self.fc2 = nn.Linear(30, 30)
+        self.fc3 = nn.Linear(30, output_size)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
+        torch.nn.init.xavier_uniform_(self.fc3.weight)
 
     def forward(self, x):
-        return self.layer(x)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
 EPISODES = 500
 # 카트폴 예제에서의 DQN 에이전트
 class DQNAgent:
     def __init__(self, state_size, action_size):
-        self.render = True
+        self.render = False
         self.load_model = False
 
         # 상태와 행동의 크기 정의
@@ -48,8 +53,11 @@ class DQNAgent:
         self.memory = deque(maxlen=3000)
 
         # 모델과 타깃 모델 생성
-        self.model = self.build_model()
-        self.target_model = self.build_model()
+        self.model = Net(self.state_size, self.action_size)
+        self.target_model = Net(self.state_size, self.action_size)
+
+        self.criterion = nn.MSELoss().to(device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         # 타깃 모델 초기화
         self.update_target_model()
@@ -59,15 +67,24 @@ class DQNAgent:
 
     # 타깃 모델을 모델의 가중치로 업데이트
     def update_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        print("------------update target-------------")
+        self.target_model.fc1.weight = self.model.fc1.weight
+        self.target_model.fc2.weight = self.model.fc2.weight
+        self.target_model.fc3.weight = self.model.fc3.weight
+        #weight.data 는 뭐지...
 
     # 입실론 탐욕 정책으로 행동 선택
     def get_action(self, state):
         if np.random.rand() <= self.epsilon:
+            # 무작위 행동 반환
             return random.randrange(self.action_size)
         else:
-            q_value = self.model.predict(state)
-            return np.argmax(q_value[0])
+            # 모델로부터 행동 산출
+            s = time.time()
+            state = torch.FloatTensor(state).to(device)
+            q_values = self.model(state)[0]
+            #print("action time : ", time.time() - s, q_values)
+            return torch.argmax(q_values).numpy()
 
     # 샘플 <s, a, r, s'>을 리플레이 메모리에 저장
     def append_sample(self, state, action, reward, next_state, done):
@@ -81,21 +98,21 @@ class DQNAgent:
         # 메모리에서 배치 크기만큼 무작위로 샘플 추출
         mini_batch = random.sample(self.memory, self.batch_size)
 
-        states = np.zeros((self.batch_size, self.state_size))
-        next_states = np.zeros((self.batch_size, self.state_size))
+        states = torch.zeros((self.batch_size, self.state_size)).to(device)
+        next_states = torch.zeros((self.batch_size, self.state_size)).to(device)
         actions, rewards, dones = [], [], []
 
         for i in range(self.batch_size):
-            states[i] = mini_batch[i][0]
+            states[i] = torch.FloatTensor(mini_batch[i][0])
             actions.append(mini_batch[i][1])
             rewards.append(mini_batch[i][2])
-            next_states[i] = mini_batch[i][3]
+            next_states[i] = torch.FloatTensor(mini_batch[i][3])
             dones.append(mini_batch[i][4])
 
         # 현재 상태에 대한 모델의 큐함수
         # 다음 상태에 대한 타깃 모델의 큐함수
-        target = self.model.predict(states)
-        target_val = self.target_model.predict(next_states)
+        target = self.model(states)
+        target_val = self.target_model(next_states)
 
         # 벨만 최적 방정식을 이용한 업데이트 타깃
         for i in range(self.batch_size):
@@ -103,10 +120,13 @@ class DQNAgent:
                 target[i][actions[i]] = rewards[i]
             else:
                 target[i][actions[i]] = rewards[i] + self.discount_factor * (
-                    np.amax(target_val[i]))
+                    torch.max(target_val[i]))
 
-        self.model.fit(states, target, batch_size=self.batch_size,
-                       epochs=1, verbose=0)
+        self.optimizer.zero_grad()
+        output = self.model(states)
+        loss = self.criterion(output, target)
+        loss.backward()
+        self.optimizer.step()
 
 
 if __name__ == "__main__":
@@ -160,8 +180,8 @@ if __name__ == "__main__":
                 scores.append(score)
                 episodes.append(e)
                 steps.append(step_size)
-                #pylab.plot(episodes, steps, 'b')
-                #pylab.savefig("./save_graph/cartpole_dqn.png")
+                pylab.plot(episodes, steps, 'b')
+                pylab.savefig("./save_graph/cartpole_dqn.png")
                 print("episode:", e, "  score:", score, "  memory length:",
                       len(agent.memory), "  epsilon:", agent.epsilon, " step:", step_size)
 
