@@ -2,3 +2,7 @@
 zerotoall/MNIST_data/
 
 deep-sarsa/img/
+
+breakout/save_model/
+
+a2c/save_model/

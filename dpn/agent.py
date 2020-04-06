@@ -103,7 +103,7 @@ class DQNAgent:
             else:
                 target[i][actions[i]] = rewards[i] + self.discount_factor * (
                     np.amax(target_val[i]))
-        print(states.shape)
+        
         self.model.fit(states, target, batch_size=self.batch_size,
                        epochs=1, verbose=0)
 
@@ -159,8 +159,8 @@ if __name__ == "__main__":
                 scores.append(score)
                 episodes.append(e)
                 steps.append(step_size)
-                #pylab.plot(episodes, steps, 'b')
-                #pylab.savefig("./save_graph/cartpole_dqn.png")
+                pylab.plot(episodes, steps, 'b')
+                pylab.savefig("./save_graph/cartpole_dqn.png")
                 print("episode:", e, "  score:", score, "  memory length:",
                       len(agent.memory), "  epsilon:", agent.epsilon, " step:", step_size)
 
