@@ -65,8 +65,7 @@ class DQNAgent:
         self.target_model = Net(self.state_size, self.action_size).to(device)
 
         self.criterion = nn.MSELoss().to(device)
-        self.optimizer = optim.Adam(
-            self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         # 타깃 모델 초기화
         self.update_target_model()
