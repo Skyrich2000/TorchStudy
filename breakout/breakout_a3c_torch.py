@@ -119,15 +119,12 @@ class A3CAgent:
     # 정책신경망을 업데이트하는 함수
     def actor_upgrade(self, state, action, advantage):
         policy = self.actor(state)
-        action_prob = torch.zeros([len(state), 1]).to(device)
-        for i in range(len(state)):
-            action_prob[i] = policy[i][action[i]]
+        action = torch.LongTensor(action).unsqueeze(1).to(device)
 
+        action_prob = policy.gather(1, action)
         loss1 = (-torch.log(action_prob) * advantage).sum()
-
-        loss2 = (policy * torch.log(policy + 1e-10)
-                 ).sum(dim=1).sum()  # 왜 dim=1 ??
-
+        
+        loss2 = (policy * torch.log(policy + 1e-10)).sum(dim=1).sum()  # 왜 dim=1 ??
         loss = loss1 + 0.01 * loss2
 
         with lock:

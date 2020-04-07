@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 # 멀티쓰레딩을 위한 글로벌 변수
 global episode, render
-render = False
+render = True
 episode = 0
 EPISODES = 8000000
 # 환경 생성
@@ -68,6 +68,10 @@ class A3CAgent:
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
 
+        print("load")
+        self.actor.load_state_dict(torch.load('./save_model/a3c_actor.pth'))
+        self.critic.load_state_dict(torch.load("./save_model/a3c_critic.pth"))
+
     # 쓰레드를 만들어 학습을 하는 함수
     def train(self):
         # 쓰레드 수만큼 Agent 클래스 생성
@@ -100,7 +104,7 @@ class A3CAgent:
         policy = self.actor(state)
         action_prob = policy.gather(1, action)
         
-        loss1 = (-torch.log(action_prob) * advantage).sum()
+        loss1 = (torch.log(action_prob) * advantage).sum()
         loss2 = (policy * torch.log(policy + 1e-10)).sum(dim=1).sum() #왜 dim=1 ??
 
         loss = loss1 + 0.01 * loss2
@@ -161,7 +165,8 @@ class Agent(threading.Thread):
 
         # 로컬 모델 생성
         self.local_actor, self.local_critic = self.build_local_model()
-
+        self.update_local_model()
+        
         # 모델 업데이트 주기
         self.t_max = 100
         self.t = 0
